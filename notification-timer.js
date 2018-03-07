@@ -3,16 +3,14 @@
 const moment = require('moment')
 const notify = require('./notify')
 
-const timeFromSettings = require('./config').notificationTime
+let existingTimer
 
-module.exports = function (trayIcon) {
-  let existingTimer
-
-  return function setUpTimer (isForTomorrow) {
-    const notificationTime = moment(timeFromSettings)
+function setUpNotification (time, trayIcon) {
+  return function setUpTimer (isForNextDay) {
+    const notificationTime = moment(time)
     const now = moment()
 
-    if (isForTomorrow || now.isAfter(notificationTime)) {
+    if (isForNextDay || now.isAfter(notificationTime)) {
       notificationTime.add(1, 'days')
     }
 
@@ -23,3 +21,9 @@ module.exports = function (trayIcon) {
     }, notificationTime.diff(now))
   }
 }
+
+function cancelPreviousNotification () {
+  clearTimeout(existingTimer)
+}
+
+module.exports = { setUpNotification, cancelPreviousNotification }

@@ -4,21 +4,30 @@ const path = require('path')
 const fs = require('fs')
 const { app, BrowserWindow, ipcMain, Tray } = require('electron')
 const Positioner = require('electron-positioner')
-const setupNotifications = require('./notification-timer')
+const { setUpNotification, cancelPreviousNotification } = require('./notification-timer')
+const { getSettings, writeSettings } = require('./config')
 
 const iconWithoutNotification = process.cwd() + '/without-notification.png'
 
 app.on('ready', function ready () {
   const appWindow = createWindow()
+  appWindow.webContents.openDevTools()
   const trayIcon = new Tray(iconWithoutNotification)
 
   setUpListeners(appWindow, trayIcon)
-  const setTimerForNextNotification = setupNotifications(trayIcon)
-  setTimerForNextNotification()
+
+  const notificationTime = getSettings().notificationTime
+  let setTimerForNextNotification
+
+  if (notificationTime) {
+    setTimerForNextNotification = setUpNotification(notificationTime, trayIcon)
+    setTimerForNextNotification()
+  }
 
   function setUpListeners() {
     trayIcon.on('click', () => {
       toggleWindowVisibility(appWindow)
+      trayIcon.setImage(iconWithoutNotification)
     })
 
     ipcMain.on('ensureOnTop', () => {
@@ -33,14 +42,26 @@ app.on('ready', function ready () {
       const filePath = path.join(process.env.HOME, data.time.toString())
       try {
         fs.writeFileSync(filePath, data.text)
-        // TODO confirmation in UI
       } catch (err) {
-        // TODO error in UI
         event.sender.send('error', err)
       }
       toggleWindowVisibility(appWindow)
       trayIcon.setImage(iconWithoutNotification)
       setTimerForNextNotification('tomorrow')
+    })
+
+    ipcMain.on('notificationTimeChange', (event, newTime) => {
+      try {
+        writeSettings({ notificationTime: newTime })
+      } catch (err) {
+        console.log(err)
+        event.sender.send('error')
+      }
+      cancelPreviousNotification()
+      if (newTime) {
+        setTimerForNextNotification = setUpNotification(newTime, trayIcon)
+        setTimerForNextNotification()
+      }
     })
   }
 })
